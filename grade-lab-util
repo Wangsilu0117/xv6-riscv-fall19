@@ -2,6 +2,9 @@
 
 import re
 from gradelib import *
+import sys
+reload (sys)
+sys.setdefaultencoding('utf-8')
 
 r = Runner(save("xv6.out"))
 
