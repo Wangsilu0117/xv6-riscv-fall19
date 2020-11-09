@@ -8,6 +8,6 @@ int main(int argn, char *argv[]){
 	}    
 	int sleepNum = atoi(argv[1]);
 	printf("(nothing happens for a little while)\n");
-	sleep(sleepNum);
+	sleep(sleepNum);	
 	exit();
 }
