@@ -13,8 +13,7 @@ int main(int argn, char *argv[]){
     char parent_get[4];
     char child_buf[4] = {'p','o','n','g'};      
     char child_get[4];
-    int length = sizeof(parent_buf);
-    printf("hello");
+    int length = sizeof(parent_buf);    
     pipe(parent_fd); 
     pipe(child_fd); 
     

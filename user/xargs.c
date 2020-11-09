@@ -9,8 +9,7 @@ int main(int argc, char *argv[]){
     char block[32];
     char buf[32];
     char *p = buf;
-    char *lineSplit[32];
-    printf("hello");
+    char *lineSplit[32];    
     for(i = 1; i < argc; i++){
         lineSplit[j++] = argv[i];
     }
