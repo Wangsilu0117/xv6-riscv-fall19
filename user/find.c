@@ -78,5 +78,6 @@ int main(int argc, char *argv[])
     exit();
   }
   find(argv[1], argv[2]);  
+  printf("hello");
   exit();
 }
