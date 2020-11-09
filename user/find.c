@@ -77,7 +77,6 @@ int main(int argc, char *argv[])
     printf("find: find <path> <fileName>\n");
     exit();
   }
-  find(argv[1], argv[2]);  
-  printf("hello");
+  find(argv[1], argv[2]);    
   exit();
 }
