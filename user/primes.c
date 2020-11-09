@@ -56,5 +56,6 @@ int main(int argn, char *argv[]){
 		input[i] = i+2;
 	}
 	func(input, 34);
+	printf("hello");
     exit();
 }
