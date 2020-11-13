@@ -103,21 +103,21 @@ runcmd(struct cmd *cmd)
       panic("pipe");
     if(fork1() == 0){
       close(1);
-      dup(p[1]);
+      dup(p[1]);  //重定向标准输出为管道的写端
       close(p[0]);
       close(p[1]);
       runcmd(pcmd->left);
-    }
+    }    
     if(fork1() == 0){
       close(0);
-      dup(p[0]);
+      dup(p[0]);  //重定向标准输入为管道的读端
       close(p[0]);
-      close(p[1]);
+      close(p[1]);//没有用到的端口一定要立刻关闭
       runcmd(pcmd->right);
     }
     close(p[0]);
     close(p[1]);
-    wait(0);
+    wait(0);    //因为这里创建了两个子进程
     wait(0);
     break;
 
