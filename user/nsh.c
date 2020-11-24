@@ -1,186 +1,132 @@
 #include "kernel/types.h"
-#include "kernel/stat.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
-
-char cmd_buf[1024];
-char *a;    
-char *n;    
-
-inline int print(int fd, char *str)
+ 
+void execPipe(char*argv[],int argc);
+//*****************START  from sh.c *******************
+ 
+#define MAXARGS 10
+#define MAXWORD 30
+#define MAXLINE 100
+ 
+int getcmd(char *buf, int nbuf)
 {
-    return write(fd, str, strlen(str));
+    fprintf(2, "@ ");
+    memset(buf, 0, nbuf);
+    gets(buf, nbuf);
+    if (buf[0] == 0) // EOF
+        return -1;
+    return 0;
 }
-
-// [in-place]
-// replace the left side "|" with "\0"
-// then return the rest of the string or NULL
-char *simple_tok(char *p, char d)
+char whitespace[] = " \t\r\n\v";
+char args[MAXARGS][MAXWORD];
+ 
+//*****************END  from sh.c ******************
+void setargs(char *cmd, char* argv[],int* argc)
 {
-    while (*p != '\0' && *p != d)
-        p++;
-    if (*p == '\0')
-        return 0;
-    *p = '\0';
-    return p + 1;
-}
-
-
-// [in-place]
-// trim spaces on both side
-char *trim(char *c)
-{
-    char *e = c;
-    while (*e)
-        e++;
-    while (*c == ' ')
-        *(c++) = '\0';
-    while (*(--e) == ' ')
-        ;
-    *(e + 1) = '\0';
-    return c;
-}
-
-//重定向
-void redirect(int k, int pd[])
-{
-    close(k);
-    dup(pd[k]);
-    close(pd[0]);
-    close(pd[1]);
-}
-
-
-
-void handle(char *cmd)
-{
-    char buf[32][32];
-    char *pass[32];
-    int argc = 0;
-
-    cmd = trim(cmd);
-    // fprintf(2, "cmd: %s\n", cmd);
-
-    for (int i = 0; i < 32; i++)
-        pass[i] = buf[i];
-
-    char *c = buf[argc];
-    int input_pos = 0, output_pos = 0;
-    for (char *p = cmd; *p; p++)
+    // 让argv的每一个元素都指向args的每一行
+    for(int i = 0; i < MAXARGS; i++){
+        argv[i]=&args[i][0];
+    }
+    int i;  // 表示第i个word    
+    int j = 0;
+    for (i = 0; cmd[j] != '\n' && cmd[j] != '\0'; j++)
     {
-        if (*p == ' ' || *p == '\n')
-        {
-            *c = '\0';
-            argc++;
-            c = buf[argc];
+        // 每一轮循环都是找到输入的命令中的一个word，比如 echo hi ,就是先找到echo，再找到hi
+        // 让argv[i]分别指向他们的开头，并且将echo，hi后面的空格设为\0
+        // 跳过之前的空格
+        while (strchr(whitespace,cmd[j])){
+            j++;
         }
-        else {
-            if(*p == '<') {
-                input_pos = argc + 1;
-            } if(*p == '>') {
-                output_pos = argc + 1;
-            }
-            *c++ = *p;
+        argv[i++]=cmd+j;
+        // 只要不是空格，就j++,找到下一个空格
+        while (strchr(whitespace,cmd[j])==0){
+            j++;
+        }
+        cmd[j]='\0';
+    }
+    argv[i]=0;
+    *argc=i;
+}
+ 
+// void runcmd(char *cmd)
+void runcmd(char* argv[], int argc)
+{
+    for(int i = 1; i < argc; i++){
+        if(!strcmp(argv[i], "|")){
+            // 如果遇到 | 即pipe，至少说明后面还有一个命令要执行
+            execPipe(argv,argc);
         }
     }
-    *c = '\0';
-    argc++;
-    pass[argc] = 0;
-
-    // fprintf(2, "inpos: %d, outpos: %d\n", input_pos, output_pos);
-
-    if(input_pos) {
-        close(0);
-        open(pass[input_pos], O_RDONLY);
+    // 此时是仅处理一个命令：现在判断argv[1]开始，后面有没有> 
+    for(int i=1;i<argc;i++){
+        // 如果遇到 > ，说明需要执行输出重定向，首先需要关闭stdout
+        if(!strcmp(argv[i],">")){
+            close(1);
+            // 此时需要把输出重定向到后面给出的文件名对应的文件里
+            // 当然如果>是最后一个，那就会error，不过暂时先不考虑
+            open(argv[i+1],O_CREATE|O_WRONLY);
+            argv[i]=0;
+            // break;
+        }
+        if(!strcmp(argv[i],"<")){
+            // 如果遇到< ,需要执行输入重定向，关闭stdin
+            close(0);
+            open(argv[i+1],O_RDONLY);
+            argv[i]=0;
+            // break;
+        }
     }
-
-    if(output_pos) {
+    exec(argv[0], argv);
+}
+ 
+void execPipe(char*argv[],int argc){
+    int i=0;
+    // 首先找到命令中的"|",然后把他换成'\0'
+    // 从前到后，找到第一个就停止，后面都递归调用
+    for(;i<argc;i++){
+        if(!strcmp(argv[i],"|")){
+            argv[i]=0;
+            break;
+        }
+    }
+    // 先考虑最简单的情况：cat file | wc
+    int fd[2];
+    pipe(fd);
+    if(fork()==0){
+        // 子进程 执行左边的命令 把自己的标准输出关闭
         close(1);
-        open(pass[output_pos], O_WRONLY | O_CREATE);
-    }
-
-    char *pass2[32];
-    int argc2 = 0;
-    for(int pos = 0; pos < argc; pos++) {
-        if(pos == input_pos - 1) pos += 2;
-        if(pos == output_pos - 1) pos += 2;
-        pass2[argc2++] = pass[pos];
-    }
-    pass2[argc2] = 0;
-
-    if (fork())
-    {
-        wait(0);
-    }
-    else
-    {
-        exec(pass2[0], pass2);
+        dup(fd[1]);
+        close(fd[0]);
+        close(fd[1]);
+        // exec(argv[0],argv);
+        runcmd(argv,i);
+    }else{
+        // 父进程 执行右边的命令 把自己的标准输入关闭
+        close(0);
+        dup(fd[0]);
+        close(fd[0]);
+        close(fd[1]);
+        // exec(argv[i+1],argv+i+1);
+        runcmd(argv+i+1,argc-i-1);
     }
 }
 
-void handle_cmd()
+int main()
 {
-    if (a)
+    char buf[MAXLINE];
+    // Read and run input commands.
+    while (getcmd(buf, sizeof(buf)) >= 0)
     {
-        int pd[2];
-        pipe(pd);
-        // int parent_pid = getpid();
-        // fprintf(2, "pid: %d, cmd: %s\n", parent_pid, a);
-
-//------------------为什么两个都是[!fork()]?
-        if(!fork()){
-            // fprintf(2, "%d -> %d source\n", parent_pid, getpid());
-            if(n) redirect(1, pd);
-            handle(a);
-        } else if(!fork()) {
-            // fprintf(2, "%d -> %d sink\n", parent_pid, getpid());
-            if(n) {
-                redirect(0, pd);
-                a = n;
-                n = simple_tok(a, '|');
-                handle_cmd();
-            }
-        }
-
-        close(pd[0]);
-        close(pd[1]);
-        wait(0);
-        wait(0);
-    }
-
-    exit(0);
-}
-
-
-int main(int argc, char *argv[])
-{
-    //死循环，模拟shell
-    while (1)
-    {
-        print(1, "@ ");
-        //申请了一个被初始化为0的大小为1024的一维数组
-        memset(cmd_buf, 0, 1024);  
-        //系统调用，获得输入 
-        gets(cmd_buf, 1024);
-
-        if (cmd_buf[0] == 0) // EOF
-            exit(0);
-
-        *strchr(cmd_buf, '\n') = '\0';
-
-        if (fork())
+        if (fork() == 0)
         {
-            //创建一个子进程，然后一直等在这
-            wait(0);
+            // 子进程
+            char* argv[MAXARGS];
+            int argc=-1;
+            setargs(buf, argv,&argc);
+            runcmd(argv,argc);
         }
-        else
-        {
-            a = cmd_buf;
-            // 处理子进程的
-            n = simple_tok(a, '|');
-            handle_cmd();
-        }
-    }
-
+        wait(0);
+    } 
     exit(0);
 }
