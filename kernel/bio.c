@@ -102,7 +102,7 @@ bget(uint dev, uint blockno)
   // 如果在h对应的bucket中没有找到，那么需要到其他bucket中找，这种情况不会少见，因为
   // binit中，我们就把所有的buffer都插入到了第一个bucket中（当时blockno都是0
   // 此时原来bucket的锁还没有释放，因为我们在其他bucket中找到buffer后，还要将其插入到原bucket中  
-  int nh = (h+1)%NBUCKETS; //// nh表示下一个要探索的bucket，当它重新变成h，说明所有的buffer都bussy（refcnt不为0），此时,如之前设计的，panic
+  int nh = (h+1)%NBUCKETS; //// nh表示下一个要探索的bucket，当它重新变成h，说明所有的buffer都bussy（refcnt不为0），此时,panic
   while (nh!=h)
   {
     acquire(&bcache.lock[nh]);
