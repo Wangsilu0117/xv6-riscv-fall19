@@ -31,7 +31,6 @@ struct file*
 filealloc(void)
 {
   struct file *f;
-
   acquire(&ftable.lock);
   //step2 如何动态的申请呢？要申请几个呢？
   //ans 尝试申请一个
