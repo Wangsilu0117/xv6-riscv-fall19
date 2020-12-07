@@ -16,7 +16,8 @@
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
-  struct file file[NFILE];
+  //struct file file[NFILE];  //这个是静态分配的数组，把他变成动态分配的
+  struct file *file;
 } ftable;
 
 void
@@ -32,13 +33,26 @@ filealloc(void)
   struct file *f;
 
   acquire(&ftable.lock);
-  for(f = ftable.file; f < ftable.file + NFILE; f++){
-    if(f->ref == 0){
+  //如何动态的申请呢？要申请几个呢？
+  //ans 尝试申请一个
+  f = bd_malloc(sizeof(struct file));
+  if (f)
+  {
+    //申请成功
+    memset(f,0,sizeof(struct file));
+    if(f->ref == 0) {
       f->ref = 1;
-      release(&ftable.lock);
-      return f;
     }
+    release(&ftable.lock);
+    return f;
   }
+  // for(f = ftable.file; f < ftable.file + NFILE; f++){
+  //   if(f->ref == 0){
+  //     f->ref = 1;
+  //     release(&ftable.lock);
+  //     return f;
+  //   }
+  // }
   release(&ftable.lock);
   return 0;
 }
@@ -80,6 +94,7 @@ fileclose(struct file *f)
     iput(ff.ip);
     end_op(ff.ip->dev);
   }
+  bd_free(f); //释放文件描述符
 }
 
 // Get metadata about file f.
