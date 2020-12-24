@@ -57,8 +57,6 @@ void bit_clear(char *array, int index) {
   array[index/8] = (b & ~m);
 }
 
-
-
 // --------------------------------------------------------------------------wsl
 // 异或，为了给alloc赋值
 void bit_toggle(char *array,int index){
