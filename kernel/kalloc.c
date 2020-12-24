@@ -2,6 +2,11 @@
 // kernel stacks, page-table pages,
 // and pipe buffers. Allocates whole 4096-byte pages.
 
+/**
+ * 实验3-1重新设计内存分配器Memory Allocator
+ * 为每个CPU分配独有的内存分配器空闲链表
+*/
+
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"
@@ -26,6 +31,7 @@ struct kmem {
 // 修改结构体的定义，因为实际只有3个，所以这里就直接定义3个
 struct kmem kmems[3];
 
+//-----------------------------------------------------wsl
 int getcpu(){
   push_off();
   int cpu = cpuid();
@@ -36,9 +42,9 @@ int getcpu(){
 void
 kinit()
 {
-  // printf("[kinit] cpu id %d\n",getcpu());
   for (int i = 0; i < 3; i++)
   {
+//-----------------------------------------------------wsl    
     initlock(&kmems[i].lock, "kmem"); 
   }    
   freerange(end, (void*)PHYSTOP);
@@ -53,12 +59,10 @@ freerange(void *pa_start, void *pa_end)
     kfree(p);
 }
 
-// Free the page of physical memory pointed at by v,
-// which normally should have been returned by a
-// call to kalloc().  (The exception is when
-// initializing the allocator; see kinit above.)
-//-----------------------------要修改！
+//释放v指向的物理内存页
+//通常应该通过调用kalloc（）返回。在初始化异常时，请参阅上面的kinit
 //作用：将kalloc获取得到的物理内存加到空闲链表头
+
 void
 kfree(void *pa)
 {
@@ -71,7 +75,8 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-  
+
+//-----------------------------------------------------wsl 
   int hart = getcpu();  //当前调用这个函数的CPU
 
   acquire(&kmems[hart].lock);
@@ -86,6 +91,7 @@ steal(){
   struct run *rs = 0;        //链表
   for (int i = 0; i < 3; i++)
   {
+//-----------------------------------------------------wsl    
     acquire(&kmems[i].lock);  //调用的次数
     if (kmems[i].freelist!=0) //找到r!=0的就可以了
     {
@@ -100,16 +106,16 @@ steal(){
 }
 
 
-// Allocate one 4096-byte page of physical memory.
-// Returns a pointer that the kernel can use.
-// Returns 0 if the memory cannot be allocated.
-//---------------------------------------要修改
+//分配一个4096字节的物理内存页。
+//返回内核可以使用的指针。
+//如果无法分配内存，则返回0。
 //作用：分配物理内存
 void *
 kalloc(void)
 {
   struct run *r;        //链表
   
+//---------------------------------------要修改  
   int hart;             //cpu id
   hart = getcpu();
 

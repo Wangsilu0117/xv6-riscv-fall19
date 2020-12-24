@@ -1,17 +1,23 @@
-// Buffer cache.
+//缓冲缓存。
 //
-// The buffer cache is a linked list of buf structures holding
-// cached copies of disk block contents.  Caching disk blocks
-// in memory reduces the number of disk reads and also provides
-// a synchronization point for disk blocks used by multiple processes.
+//缓冲区缓存是一个包含buf结构的链表磁盘块内容的缓存副本。
+//缓存磁盘块内存减少了磁盘读取的次数，
+//还提供了多个进程使用的磁盘块的同步点。
 //
-// Interface:
-// * To get a buffer for a particular disk block, call bread.
-// * After changing buffer data, call bwrite to write it to disk.
-// * When done with the buffer, call brelse.
-// * Do not use the buffer after calling brelse.
-// * Only one process at a time can use a buffer,
-//     so do not keep them longer than necessary.
+//接口：
+//*要获取特定磁盘块的缓冲区，请调用bread。
+//*更改缓冲区数据后，调用bwrite将其写入磁盘。
+//*处理完缓冲区后，调用brelse。
+//*调用brelse后不要使用缓冲区。
+//*一次只能有一个进程使用缓冲区，
+//所以不要把它们保存得比需要的时间长。
+
+/**
+ * 使用哈希表将各个块按块号blockno作为key分组，并为每个组分配一个专用的锁。
+ * 在bget()中查找指定块时，锁上对应的锁（获取空闲块号须另作处理）。
+ * 分组的数量使用质数组（如13组）以减少哈希争用。
+ * 哈希表的搜索和空闲缓存块的查找保证原子性。
+*/
 
 
 #include "types.h"
@@ -25,24 +31,24 @@
 
 #define NBUCKETS 13 /*素数个哈希桶*/
 
-// Linked list of all buffers, through prev/next.
-// head.next is most recently used.
+// 所有缓冲区的链接列表，通过prev/next
+// head.next 是最近使用的。
 /* 每个哈希桶为双向链表加一把锁 */
-// -----------------------------------------------------wsl改
+
 struct {
   struct spinlock lock[NBUCKETS];  //自旋锁
   struct buf buf[NBUF];
-
-  struct buf hashbucket[NBUCKETS]; //代替的head
+// -----------------------------------------------------wsl改  
+  struct buf hashbucket[NBUCKETS]; //代替head
 } bcache;
 
 /* 哈希映射 */
 // -----------------------------------------------------wsl改
 int bhash(int blockno){
-  return blockno%NBUCKETS;
+  return blockno % NBUCKETS;
 }
 
-// -----------------------------------------------------wsl改
+
 void
 binit(void)  //双向循环链表
 {
@@ -50,17 +56,12 @@ binit(void)  //双向循环链表
 
   for (int i = 0; i < NBUCKETS; i++)
   {
+// -----------------------------------------------------wsl改    
     initlock(&bcache.lock[i], "bcache.bucket");
     bcache.hashbucket[i].prev = &bcache.hashbucket[i];
     bcache.hashbucket[i].next = &bcache.hashbucket[i];
   }
   
-  // initlock(&bcache.lock[i], "bcache");
-
-  // Create linked list of buffers
-  // bcache.head.prev = &bcache.head;
-  // bcache.head.next = &bcache.head;
-
   // 此时因为buffer没有和磁盘块对应起来，所以blockno全部为初始值0，将其全部放在第一个bucket中
   // 至于其他bucket缺少buffer该怎么解决，在bget里阐述
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
@@ -73,17 +74,16 @@ binit(void)  //双向循环链表
   }
 }
 
-// Look through buffer cache for block on device dev.
-// If not found, allocate a buffer.
-// In either case, return locked buffer.
+//通过缓冲区缓存查找设备dev上的块。
+//如果找不到，请分配一个缓冲区。
+//在这两种情况下，返回锁定的缓冲区。
 // 获取空闲缓存块
-// --------------------------------------------------wsl改
 static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
-
-  int h = bhash(blockno); //得到一个对应的hash值
+// --------------------------------------------------wsl改
+  int h = bhash(blockno);   //得到一个对应的hash值，用这个代替了原来的head
 
   acquire(&bcache.lock[h]); //锁住这个锁
 
@@ -102,7 +102,8 @@ bget(uint dev, uint blockno)
   // 如果在h对应的bucket中没有找到，那么需要到其他bucket中找，这种情况不会少见，因为
   // binit中，我们就把所有的buffer都插入到了第一个bucket中（当时blockno都是0
   // 此时原来bucket的锁还没有释放，因为我们在其他bucket中找到buffer后，还要将其插入到原bucket中  
-  int nh = (h+1)%NBUCKETS; //// nh表示下一个要探索的bucket，当它重新变成h，说明所有的buffer都bussy（refcnt不为0），此时,panic
+  // --------------------------------------------------wsl改
+  int nh = (h+1) % NBUCKETS; //nh表示下一个要探索的bucket，当它重新变成h，说明所有的buffer都bussy（refcnt不为0），此时,panic
   while (nh!=h)
   {
     acquire(&bcache.lock[nh]);
@@ -133,8 +134,7 @@ bget(uint dev, uint blockno)
   panic("bget: no buffers");  
 }
 
-// Return a locked buf with the contents of the indicated block.
-
+// 返回一个包含指定块内容的锁定buf。
 struct buf*
 bread(uint dev, uint blockno)
 {
@@ -148,8 +148,7 @@ bread(uint dev, uint blockno)
   return b;
 }
 
-// Write b's contents to disk.  Must be locked.
-// 
+// 将b的内容写入磁盘。必须锁定。
 void
 bwrite(struct buf *b)
 {
@@ -158,9 +157,9 @@ bwrite(struct buf *b)
   virtio_disk_rw(b->dev, b, 1);
 }
 
-// Release a locked buffer.
-// Move to the head of the MRU list.
-// --------------------------------------------------------wsl改
+// 释放锁定的缓冲区。
+// 移到MRU列表的前面。
+
 void
 brelse(struct buf *b)
 {
@@ -168,7 +167,7 @@ brelse(struct buf *b)
     panic("brelse");
 
   releasesleep(&b->lock);
-  
+// --------------------------------------------------------wsl改 
   int h = bhash(b->blockno);  
   acquire(&bcache.lock[h]);
   b->refcnt--;
