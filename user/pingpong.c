@@ -5,6 +5,8 @@
 * 管道pipe：正常创建后，xxx[1]为管道写入端，xxx[0]为管道读出端
 * fork()的返回值：子进程的返回值为0，父进程的返回值为子进程的pid号
 * 爱了，这个pipe的返回值并不需要用上，in fact，返回值也是-1 表示错误，0表示正确
+* 父进程通过将”ping”写入parent_fd[1]来发送子进程，而子进程则通过从parent_fd[0]读取来接收字节。
+* 子进程从父进程收到后，通过将“pong”写入child_fd[1]来回复，然后由父进程从child_fd[0]读取。
 */
 int main(int argn, char *argv[]){
 	int parent_fd[2], child_fd[2];
