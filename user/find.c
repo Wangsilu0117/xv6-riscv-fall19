@@ -4,12 +4,17 @@
 #include "kernel/fs.h"
 #include "kernel/fcntl.h"
 
+/**
+ * 在xv6上实现UNIX函数find，
+ * 即在目录树中查找名称与字符串匹配的所有文件。
+*/
+
 char* fmt_name(char *path)
 {
   static char buf[DIRSIZ+1];
   char *p;
 
-  // Find first character after last slash.
+  //查找最后一个斜杠后的第一个字符。
   for(p=path+strlen(path); p >= path && *p != '/'; p--);
   p++;
   
@@ -18,7 +23,7 @@ char* fmt_name(char *path)
 }
 
 // 当系统文件名与要查找的文件名一致时，打印系统文件完整路径
-void eq_print(char *fileName, char *findName){
+void equip_path(char *fileName, char *findName){
 	if(strcmp(fmt_name(fileName), findName) == 0){
 		printf("%s\n", fileName);
 	}
@@ -26,47 +31,35 @@ void eq_print(char *fileName, char *findName){
 
 void find (char *path, char *findName)
 {  
-  char buf[512], *p;	
-	struct dirent de;
-  int fd;  
-  struct stat st;
+  char buf[512], *p;		
+  struct dirent de; //目录项结构体  
+  struct stat st;   //文件描述符
 
-  if ((fd = open(path, O_RDONLY)) < 0) {
-    // 只读
-    fprintf(2, "find: cannot open %s\n", path);
-    return;
+  int fd = open(path, O_RDONLY);  //打开文件
+  fstat(fd, &st);   //由文件描述词取得文件状态
+
+  if (st.type == T_FILE)
+  {
+    equip_path(path,findName);  //输出完整路径  
   }
-
-  if(fstat(fd, &st) < 0) {
-    fprintf(2, "find: cannot stat %s\n", path);
-    close(fd);
-    return;
-  }
-
-  switch(st.type) {    
-    case T_FILE:
-      eq_print(path,findName);
-      // printf("%s %d %d %l\n", fmtname(path), st.type, st.ino, st.size);
-      break;
-
-    case T_DIR:
-      if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
-        printf("find: path too long\n");
-        break;
-      }
-      strcpy(buf, path);
-      p = buf+strlen(buf);
-      *p++ = '/';
-      while(read(fd, &de, sizeof(de)) == sizeof(de)){
-        if(de.inum == 0 || de.inum == 1 || strcmp(de.name,".")==0 || strcmp(de.name,"..")==0){
-          continue;
-        }
-          
-        memmove(p, de.name, strlen(de.name));
-        p[strlen(de.name)] = 0;
-        find(buf, findName);
-      }
-      break;
+  else if (st.type == T_DIR)
+  {
+    if(strlen(path) + 1 + DIRSIZ + 1 > sizeof(buf))
+    {
+        printf("find: path too long\n");        
+    }
+    strcpy(buf, path);
+    p = buf + strlen(buf);  //指向末尾
+    *p++ = '/';
+    while(read(fd, &de, sizeof(de)) == sizeof(de))
+    {
+      if(de.inum == 0 || de.inum == 1 || strcmp(de.name,".")==0 || strcmp(de.name,"..")==0){
+        continue;
+      }          
+      memmove(p, de.name, strlen(de.name));   //拷贝p所指的内存内容前n个字节到de.name所指的地址上
+      p[strlen(de.name)] = 0;
+      find(buf, findName);    //递归查找
+    }
   }
   close(fd);
 }
