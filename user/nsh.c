@@ -2,13 +2,27 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
  
-void execPipe(char*argv[],int argc);
-//*****************START  from sh.c *******************
- 
 #define MAXARGS 10
 #define MAXWORD 30
 #define MAXLINE 100
- 
+
+char whitespace[] = " \t\r\n\v";
+char args[MAXARGS][MAXWORD];
+
+void execPipe(char*argv[], int argc);
+
+/**
+ * echo：输出内容到标准输出
+ * ls：显示指定工作目录下之内容
+ * grep：搜索指定文件的内容,匹配指定的模式,默认情况下输出匹配内容所在的行
+ * cat：连接文件并打印到标准输出设备上
+ * 要求支持输入输出重定向 > <
+ * 支持两元素管道 | 
+*/
+
+/**
+ * 从cmd获得输入存在buf里
+*/
 int getcmd(char *buf, int nbuf)
 {
     fprintf(2, "@ ");
@@ -18,11 +32,11 @@ int getcmd(char *buf, int nbuf)
         return -1;
     return 0;
 }
-char whitespace[] = " \t\r\n\v";
-char args[MAXARGS][MAXWORD];
- 
-//*****************END  from sh.c ******************
-void setargs(char *cmd, char* argv[],int* argc)
+
+/**
+ * 将输入的一行命令拆解
+*/
+void setargs(char *cmd, char* argv[], int* argc)
 {
     // 让argv的每一个元素都指向args的每一行
     for(int i = 0; i < MAXARGS; i++){
@@ -33,14 +47,15 @@ void setargs(char *cmd, char* argv[],int* argc)
     for (i = 0; cmd[j] != '\n' && cmd[j] != '\0'; j++)
     {
         // 每一轮循环都是找到输入的命令中的一个word，比如 echo hi ,就是先找到echo，再找到hi
-        // 让argv[i]分别指向他们的开头，并且将echo，hi后面的空格设为\0
-        // 跳过之前的空格
-        while (strchr(whitespace,cmd[j])){
+        // 让argv[i]分别指向他们的开头，并且将echo，hi后面的空格设为\0        
+        while (strchr(whitespace, cmd[j]))  //在一个串中查找给定字符的第一个匹配之处
+        {// 跳过之前的空格
             j++;
         }
         argv[i++]=cmd+j;
-        // 只要不是空格，就j++,找到下一个空格
-        while (strchr(whitespace,cmd[j])==0){
+        
+        while (strchr(whitespace,cmd[j])==0)
+        {// 只要不是空格，就j++,找到下一个空格
             j++;
         }
         cmd[j]='\0';
@@ -49,12 +64,12 @@ void setargs(char *cmd, char* argv[],int* argc)
     *argc=i;
 }
  
-// void runcmd(char *cmd)
 void runcmd(char* argv[], int argc)
 {
-    for(int i = 1; i < argc; i++){
-        if(!strcmp(argv[i], "|")){
-            // 如果遇到 | 即pipe，至少说明后面还有一个命令要执行
+    for(int i = 1; i < argc; i++)
+    {
+        if(!strcmp(argv[i], "|"))
+        {// 如果遇到 | 即pipe，说明后面还有一个命令要执行            
             execPipe(argv,argc);
         }
     }
@@ -66,20 +81,21 @@ void runcmd(char* argv[], int argc)
             // 此时需要把输出重定向到后面给出的文件名对应的文件里
             // 当然如果>是最后一个，那就会error，不过暂时先不考虑
             open(argv[i+1],O_CREATE|O_WRONLY);
-            argv[i]=0;
-            // break;
+            argv[i]=0;            
         }
         if(!strcmp(argv[i],"<")){
             // 如果遇到< ,需要执行输入重定向，关闭stdin
             close(0);
             open(argv[i+1],O_RDONLY);
-            argv[i]=0;
-            // break;
+            argv[i]=0;            
         }
     }
     exec(argv[0], argv);
 }
- 
+
+/**
+ * 执行pipe
+*/
 void execPipe(char*argv[],int argc){
     int i=0;
     // 首先找到命令中的"|",然后把他换成'\0'
@@ -114,17 +130,15 @@ void execPipe(char*argv[],int argc){
 
 int main()
 {
-    char buf[MAXLINE];
-    // Read and run input commands.
+    char buf[MAXLINE];        
     while (getcmd(buf, sizeof(buf)) >= 0)
     {
         if (fork() == 0)
-        {
-            // 子进程
-            char* argv[MAXARGS];
-            int argc=-1;
-            setargs(buf, argv,&argc);
-            runcmd(argv,argc);
+        {// 子进程            
+            char* argv[MAXARGS];    //每一个指针都指向拆解后的单词
+            int argc= -1;           //argv数组的个数
+            setargs(buf, argv, &argc);
+            runcmd(argv,argc);      //跑指令
         }
         wait(0);
     } 
