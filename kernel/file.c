@@ -2,6 +2,11 @@
 // Support functions for system calls that involve file descriptors.
 //
 
+/**
+ * Lab4-1将进程文件描述符修改为
+ * 使用buddy allo cator*动态地分配/释放文件描述符。
+*/
+
 #include "types.h"
 #include "riscv.h"
 #include "defs.h"
@@ -16,7 +21,7 @@
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
-  // step1 删掉
+// ---------------------------------step1 删掉
   //struct file file[NFILE];  //这个是静态分配的数组，把他变成动态分配的
 } ftable;
 
@@ -32,12 +37,10 @@ filealloc(void)
 {
   struct file *f;
   acquire(&ftable.lock);
-  //step2 如何动态的申请呢？要申请几个呢？
-  //ans 尝试申请一个
+// ---------------------------------step2 如何动态的申请呢？要申请几个呢？1个
   f = bd_malloc(sizeof(struct file));
   if (f)
-  {
-    //申请成功
+  {//申请成功    
     memset(f,0,sizeof(struct file));
     if(f->ref == 0) {
       f->ref = 1;
@@ -93,7 +96,7 @@ fileclose(struct file *f)
     iput(ff.ip);
     end_op(ff.ip->dev);
   }
-  //step 3
+//------------------------------------step 3
   bd_free(f); //释放文件描述符
 }
 
