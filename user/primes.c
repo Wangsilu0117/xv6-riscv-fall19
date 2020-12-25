@@ -4,16 +4,17 @@
 /*
 * 传入要筛选的primes[]
 */
-void func(int *input, int num){		
-	if(num == 1)
-	{// 最后一次递归之后，输出31，然后就返回不递归了		
-		printf("prime %d\n", *input);
-		return;
-	}
+void func(int *input, int num)
+{		
 	int p[2],i,temp;
 	int prime = *input;
 	// 非最后一次递归
 	printf("prime %d\n", prime);	
+	if(num == 1)
+	{// 最后一次递归之后，返回				
+		return;
+	}
+	
 	pipe(p);
 	
     if(fork() == 0)		
