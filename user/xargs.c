@@ -27,6 +27,7 @@ int main(int argc, char *argv[]){
                     exec(argv[1], lineSplit);
                 }                
                 wait();
+                
             }
             else if(block[l] == ' ') 
             {
